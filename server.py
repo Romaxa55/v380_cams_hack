@@ -10,8 +10,9 @@ import os
 class server:
     # CHECKER CONFIG FOR SCANNING CAMS ONLINE IN RANGE
     SCAN_NEW_CAMS = False
-    FROM_ID = 10745000
-    TO_ID = 10746000
+    FROM_ID = 10000000
+    TO_ID = 12000000
+    TIMEOUT = 600
     PACK_LIST = 100000  # SIZE LIST ID CAMS FOR 1 THREAD
     SERVER_CHECKER = '47.74.66.18'
     PORT_CHECKER = 8900
@@ -35,15 +36,37 @@ class server:
                 if not bool(self.CamsList):
                     break
                 all_processes = []
-                for dev in self.CamsList:
-                    if dev:
-                        self.process = multiprocessing.Process(target=self.CreateSocket, args=(dev,))
-                        all_processes.append(self.process)
-                        self.process.start()
+                cams = list(self.func_chunk(self.CamsList, 200))
+                for cam in cams:
+                    self.process = multiprocessing.Process(target=self.Multiprocessing, args=(cam,))
+                    all_processes.append(self.process)
+                    self.process.start()
                 for p in all_processes:
                     p.join()
+
         except socket.error as e:
             print("socket creation failed with error %s" % (e))
+
+    def Multiprocessing(self, devs):
+        try:
+            all_processes = []
+            for dev in devs:
+                if dev:
+                    process = multiprocessing.Process(target=self.CreateSocket, args=(dev,))
+                    all_processes.append(self.process)
+                    process.start()
+            for p in all_processes:
+                p.join()
+        except socket.error as e:
+            print("socket creation failed with error %s" % (e))
+    @staticmethod
+    def func_chunk(lst, n):
+        for x in range(0, len(lst), n):
+            e_c = lst[x: n + x]
+
+            if len(e_c) < n:
+                e_c = e_c + [None for y in range(n - len(e_c))]
+            yield e_c
 
     @staticmethod
     def chunks(lst, count):
@@ -159,7 +182,7 @@ class server:
             data += '3131313131313131313131318a1bc0a801096762230a93f5d100'
             data = bytes.fromhex(data)
             self.send_data(check_s, data, self.SERVER, self.PORT)
-            check_s.settimeout(20)
+            check_s.settimeout(self.TIMEOUT)
             print(f'\u001b[32m[+]Sniffing {dev}...\u001b[37m')
             time.sleep(0.001)
             result = (check_s.recvfrom(4096, 0))[0]
