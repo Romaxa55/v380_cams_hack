@@ -5,6 +5,7 @@ import multiprocessing
 import time
 import hashlib
 import os
+import sys
 
 
 class server:
@@ -12,8 +13,9 @@ class server:
     SCAN_NEW_CAMS = False
     FROM_ID = 10000000
     TO_ID = 12000000
-    TIMEOUT = 90
-    PACK_LIST = 100000  # SIZE LIST ID CAMS FOR 1 THREAD
+    TIMEOUT = 30
+    PACK_LIST = 80000  # SIZE LIST ID CAMS FOR 1 THREAD
+    PACK_LIST_CAMS = 300  # SIZE CAMS FOR 1 THREAD
     SERVER_CHECKER = '47.74.66.18'
     PORT_CHECKER = 8900
     TMP_FILE = "tmp.txt"
@@ -27,7 +29,12 @@ class server:
     CamsList = None
 
     def __init__(self):
+        self.process = None
         try:
+            if len(sys.argv) == 2:
+                if str(sys.argv[1]) == "scan":
+                    self.SCAN_NEW_CAMS = True
+
             if self.SCAN_NEW_CAMS:
                 self.GenerateListCams(f=self.FROM_ID, to=self.TO_ID)
             while True:
@@ -35,30 +42,29 @@ class server:
                 self.CamList(self.FileListCams)
                 if not bool(self.CamsList):
                     break
-                all_processes = []
-                cams = list(self.func_chunk(self.CamsList, 200))
+                cams = list(self.func_chunk(self.CamsList, self.PACK_LIST_CAMS))
+
                 for cam in cams:
-                    self.process = multiprocessing.Process(target=self.Multiprocessing, args=(cam,))
-                    all_processes.append(self.process)
-                    self.process.start()
-                for p in all_processes:
-                    p.join()
+                    self.Multiprocessing(cam)
+                    time.sleep(1)
 
         except socket.error as e:
-            print("socket creation failed with error %s" % (e))
+            print("socket creation failed with error %s\nuse Pt"
+                  "python script.py scan" % (e))
 
     def Multiprocessing(self, devs):
         try:
             all_processes = []
             for dev in devs:
                 if dev:
-                    process = multiprocessing.Process(target=self.CreateSocket, args=(dev,))
+                    self.process = multiprocessing.Process(target=self.CreateSocket, args=(dev,))
                     all_processes.append(self.process)
-                    process.start()
+                    self.process.start()
             for p in all_processes:
                 p.join()
         except socket.error as e:
             print("socket creation failed with error %s" % (e))
+
     @staticmethod
     def func_chunk(lst, n):
         for x in range(0, len(lst), n):
