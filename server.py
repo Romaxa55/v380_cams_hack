@@ -1,7 +1,5 @@
 import socket
-import threading
-
-print_lock = threading.Lock()
+import struct
 
 
 class server:
@@ -17,11 +15,30 @@ class server:
             self.s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             for dev in self.CamsList:
                 self.CreateSocket(dev)
-            result = (self.s.recvfrom(4096, 0))[0]
-            print(f'Received response from server: {result}')  # debugging
+            while (True):
+                # result = (self.s.recvfrom(4096, 0))[0]
+                result = b'\xcf39097810.nvdvr.net\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00152.32.227.233\x00\x00\x02\xb6\xfe\x05\x00\x01\x00\x07\x00\x00\x00\x00\x00\x00\x00'
+                print(f'Received response from server: {self.byte2str(result)}')  # debugging
+                result = self.ParseRelayServer(result)
+                print(result)
+                break
 
         except socket.error as e:
             print("socket creation failed with error %s" % (e))
+
+    def ConnenctToRelay(self):
+        pass
+
+    def ParseRelayServer(self, data):
+        try:
+            result = {'id': str(int(data[1:9])),
+                      'relay_server': data[33:data.find(b'\x00', 33)].decode('utf-8'),
+                      'relay_port': struct.unpack('<H', data[50:52])[0]}
+            print(
+                f'\u001b[32m[+] Relay found for id {result["id"]} {result["relay_server"]}:{result["relay_port"]}\u001b[37m')
+            return result
+        except:
+            print("Ops")
 
     def CamList(self, fe):
         try:
