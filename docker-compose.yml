@@ -1,0 +1,19 @@
+version: "3.3"
+services:
+  v380:
+    build:
+      context: ./build
+      dockerfile: Dockerfile
+      target: base
+    container_name: v380_cams
+    env_file:
+      - ./.env
+    restart: unless-stopped
+    logging:
+      driver: local
+    volumes:
+      - ./server.py:/app/script.py:ro
+      - app:/app
+
+volumes:
+  app:
