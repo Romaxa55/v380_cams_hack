@@ -12,7 +12,7 @@ class server:
     SCAN_NEW_CAMS = False
     FROM_ID = 10000000
     TO_ID = 12000000
-    TIMEOUT = 600
+    TIMEOUT = 90
     PACK_LIST = 100000  # SIZE LIST ID CAMS FOR 1 THREAD
     SERVER_CHECKER = '47.74.66.18'
     PORT_CHECKER = 8900
@@ -184,7 +184,7 @@ class server:
             self.send_data(check_s, data, self.SERVER, self.PORT)
             check_s.settimeout(self.TIMEOUT)
             print(f'\u001b[32m[+]Sniffing {dev}...\u001b[37m')
-            time.sleep(0.001)
+            time.sleep(0.0001)
             result = (check_s.recvfrom(4096, 0))[0]
             if result[6:7] != b'\x00':
                 result = self.ParseRelayServer(result)
