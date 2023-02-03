@@ -11,3 +11,16 @@ export TELEGRAM_CHAT_ID=1080000000
 docker-compose build
 docker-compose up -d
 ```
+
+#### in Config scan range
+ - FROM_ID = 10000000
+ - TO_ID = 12000000
+
+#### Start script
+```
+python script.py scan
+```
+or
+```
+python script.py
+```
