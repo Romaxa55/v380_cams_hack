@@ -175,7 +175,9 @@ class server:
                 with open(self.PassFile, "a") as f:
                     f.write(f"{d['id']}:{str(username)}:{str(password)}\n")
                 relay_s.close()
-                return d["id"]
+            else:
+                self.ConnectToRelay(self, d)
+            return d["id"]
         except socket.error as e:
             print("socket creation failed with error %s" % (e))
 
