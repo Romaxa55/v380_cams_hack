@@ -116,15 +116,19 @@ class server:
                     sock.send(data)
                     response = sock.recv(4096)
                     sock.close()
-                    if response[4] == 1:
-                        # print(f'\u001b[32m[+] Camera with device ID: {i} is online!\u001b[37m')
-                        # Append-adds at last
-                        # with open(self.FileListCams, "a") as f:
-                        #     f.write(f"{i}\n")
+                    try:
+                        if response[4] == 1:
+                            # print(f'\u001b[32m[+] Camera with device ID: {i} is online!\u001b[37m')
+                            # Append-adds at last
+                            # with open(self.FileListCams, "a") as f:
+                            #     f.write(f"{i}\n")
 
-                        process = multiprocessing.Process(target=self.CreateSocket, args=(i,))
-                        process.start()
-                        process.join()
+                            process = multiprocessing.Process(target=self.CreateSocket, args=(i,))
+                            process.start()
+                            process.join()
+                    except IndexError:
+                        pass
+
                 except ConnectionResetError:
                     print(f'\u001b[32m[+] Socket error, don\'t worry... script worked...\u001b[37m')
                     continue
