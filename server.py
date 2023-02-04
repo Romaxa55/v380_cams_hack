@@ -116,7 +116,7 @@ class server:
                 response = sock.recv(4096)
                 sock.close()
                 if response[4] == 1:
-                    print(f'\u001b[32m[+] Camera with device ID: {i} is online!\u001b[37m')
+                    # print(f'\u001b[32m[+] Camera with device ID: {i} is online!\u001b[37m')
                     # Append-adds at last
                     # with open(self.FileListCams, "a") as f:
                     #     f.write(f"{i}\n")
@@ -207,7 +207,7 @@ class server:
                 data += '3131313131313131313131318a1bc0a801096762230a93f5d100'
                 data = bytes.fromhex(data)
                 self.send_data(check_s, data, self.SERVER, self.PORT)
-                print(f'\u001b[32m[+]Sniffing {dev}...\u001b[37m')
+                # print(f'\u001b[32m[+]Sniffing {dev}...\u001b[37m')
                 result = (check_s.recvfrom(4096, 0))[0]
                 if result[6:7] != b'\x00':
                     result = self.ParseRelayServer(result)
