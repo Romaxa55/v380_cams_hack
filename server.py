@@ -125,8 +125,9 @@ class server:
                         process = multiprocessing.Process(target=self.CreateSocket, args=(i,))
                         process.start()
                         process.join()
-                except socket:
+                except ConnectionResetError:
                     print(f'\u001b[32m[+] Socket error, don\'t worry... script worked...\u001b[37m')
+                    continue
 
     def RemoveDuplicate(self):
         lines_present = set()
