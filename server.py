@@ -104,26 +104,29 @@ class server:
     def CheckerOnline(self, list_ids):
         for i in list_ids:
             if i:
-                # print(f'\u001b[35m[+] Check ID: {i}\u001b[37m')
-                hexID = bytes(str(i), 'utf-8').hex()
-                data = 'ac000000f3030000'
-                data += hexID
-                data += '2e6e766476722e6e657400000000000000000000000000006022000093f5d10000000000000000000000000000000000'
-                data = bytes.fromhex(data)
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.connect((self.SERVER_CHECKER, self.PORT_CHECKER))
-                sock.send(data)
-                response = sock.recv(4096)
-                sock.close()
-                if response[4] == 1:
-                    # print(f'\u001b[32m[+] Camera with device ID: {i} is online!\u001b[37m')
-                    # Append-adds at last
-                    # with open(self.FileListCams, "a") as f:
-                    #     f.write(f"{i}\n")
+                try:
+                    # print(f'\u001b[35m[+] Check ID: {i}\u001b[37m')
+                    hexID = bytes(str(i), 'utf-8').hex()
+                    data = 'ac000000f3030000'
+                    data += hexID
+                    data += '2e6e766476722e6e657400000000000000000000000000006022000093f5d10000000000000000000000000000000000'
+                    data = bytes.fromhex(data)
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    sock.connect((self.SERVER_CHECKER, self.PORT_CHECKER))
+                    sock.send(data)
+                    response = sock.recv(4096)
+                    sock.close()
+                    if response[4] == 1:
+                        # print(f'\u001b[32m[+] Camera with device ID: {i} is online!\u001b[37m')
+                        # Append-adds at last
+                        # with open(self.FileListCams, "a") as f:
+                        #     f.write(f"{i}\n")
 
-                    process = multiprocessing.Process(target=self.CreateSocket, args=(i,))
-                    process.start()
-                    process.join()
+                        process = multiprocessing.Process(target=self.CreateSocket, args=(i,))
+                        process.start()
+                        process.join()
+                except socket:
+                    print(f'\u001b[32m[+] Socket error, don\'t worry... script worked...\u001b[37m')
 
     def RemoveDuplicate(self):
         lines_present = set()
