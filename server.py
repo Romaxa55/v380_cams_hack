@@ -132,6 +132,8 @@ class server:
                 except ConnectionResetError:
                     print(f'\u001b[32m[+] Socket error, don\'t worry... script worked...\u001b[37m')
                     continue
+                except ConnectionRefusedError:
+                    continue
 
     def RemoveDuplicate(self):
         lines_present = set()
