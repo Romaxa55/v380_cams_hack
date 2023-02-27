@@ -17,7 +17,7 @@ class server:
     TIMEOUT = 90
     PACK_LIST_CAMS = 9999999  # SIZE CAMS FOR 1 THREAD LISTEN
     THREAD_CHECK = 300
-    SERVER_CHECKER = '47.74.66.18'
+    SERVER_CHECKER = '149.129.177.248'
     PORT_CHECKER = 8900
     TMP_FILE = "tmp.txt"
     #########################
