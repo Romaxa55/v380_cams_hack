@@ -7,6 +7,7 @@ from app.TCPClient import TCPClient
 from app.UDPClient import UDPClient
 from app.tools import ToolsClass
 from app.handler import DataHandler
+from app.Telegramm import TelegramBot
 
 
 class AsyncServer:
@@ -33,7 +34,7 @@ class AsyncServer:
     def __init__(self, server='ipc1300.av380.net', port=8877, timeout=300,
                  file_list_cams='cams.txt', pass_file='pass.txt', debug=False,
                  server_checker='149.129.177.248', port_checker=8900,
-                 max_requests_per_minute=300, relay_queue=None):
+                 max_requests_per_minute=300):
         """
         Initializes the AsyncServer with the provided parameters.
 
@@ -57,6 +58,7 @@ class AsyncServer:
         self.server_checker = server_checker
         self.port_checker = port_checker
         self.tools = ToolsClass()
+        self.bot = TelegramBot()
 
     async def check_camera(self, camera_id, max_retries=5):
         """
@@ -111,7 +113,7 @@ class AsyncServer:
 
             local_relay_queue = asyncio.Queue()
 
-            data_handler_instance = DataHandler(camera_id=camera_id, relay_queue=local_relay_queue)
+            data_handler_instance = DataHandler(camera_id=camera_id, relay_queue=local_relay_queue, bot=self.bot)
 
             # Отправка данных на релейный сервер
             return await self.send_request(relay_data['relay_server'],
@@ -201,8 +203,6 @@ class AsyncServer:
             if i:
                 tasks.append(self.check_camera(i))
         await asyncio.gather(*tasks)
-
-
 
     async def check_camera_batch(self, camera_ids):
         """

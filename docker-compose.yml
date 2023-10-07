@@ -1,19 +1,21 @@
-version: "3.3"
+version: "3.9"
+
 services:
   v380:
     build:
-      context: ./build
+      context: .
       dockerfile: Dockerfile
-      target: base
     container_name: v380_cams
-    env_file:
-      - ./.env
-    restart: unless-stopped
-    logging:
-      driver: local
-    volumes:
-      - ./server.py:/app/script.py:ro
-      - app:/app
+    environment:
+      # Переменные окружения в контейнере.
+      # Значения, начинающиеся с "$", будут взяты из вашего локального окружения
+      # или из файла .env, если он находится в той же директории, что и docker-compose.yml
+      # Однако прямо указанные значения (как START_ID, END_ID и BATCH_SIZE ниже)
+      # будут переданы в контейнер "как есть".
 
-volumes:
-  app:
+      START_ID: 19348439  # Статическое значение, передаваемое в контейнер напрямую.
+      END_ID: 19748452  # Статическое значение.
+      BATCH_SIZE: 100  # Статическое значение.
+      TELEGRAM_TOKEN: $TELEGRAM_TOKEN  # Значение из вашего окружения или файла .env.
+      TELEGRAM_CHAT_ID: $TELEGRAM_CHAT_ID  # Аналогично.
+    restart: always

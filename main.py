@@ -1,13 +1,15 @@
 import asyncio
+import os
 import tempfile
 
 from app.server import AsyncServer
 
 
 async def main():
-    start_id = 19748419
-    end_id = 19759521
-    batch_size = 1000  # Размер пачки ID для одновременной проверки
+    # Получаем переменные окружения; используем значения по умолчанию, если они не заданы
+    start_id = int(os.environ.get('START_ID', 19348439))
+    end_id = int(os.environ.get('END_ID', 19748452))
+    batch_size = int(os.environ.get('BATCH_SIZE', 100))
 
     server = AsyncServer(debug=True)  # Используйте ваши параметры здесь
 
