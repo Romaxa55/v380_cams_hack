@@ -2,7 +2,6 @@ import asyncio
 import random
 import socket
 
-from app.rate_limiter import RateLimiter
 from app.TCPClient import TCPClient
 from app.UDPClient import UDPClient
 from app.tools import ToolsClass
@@ -34,7 +33,7 @@ class AsyncServer:
     def __init__(self, server='ipc1300.av380.net', port=8877, timeout=300,
                  file_list_cams='cams.txt', pass_file='pass.txt', debug=False,
                  server_checker='149.129.177.248', port_checker=8900,
-                 max_requests_per_minute=300):
+                 ):
         """
         Initializes the AsyncServer with the provided parameters.
 
@@ -48,7 +47,6 @@ class AsyncServer:
         - server_checker (str): The server address for checking cameras. Default is '149.129.177.248'.
         - port_checker (int): The port number for checking cameras. Default is 8900.
         """
-        self.rate_limiter = RateLimiter(max_requests=max_requests_per_minute, period=60)
         self.server = server
         self.port = port
         self.timeout = timeout
@@ -60,7 +58,7 @@ class AsyncServer:
         self.tools = ToolsClass()
         self.bot = TelegramBot()
 
-    async def check_camera(self, camera_id, max_retries=5):
+    async def check_camera(self, camera_id, semaphore, max_retries=5):
         """
         Asynchronously check a single camera with exponential backoff retry strategy.
 
@@ -78,29 +76,28 @@ class AsyncServer:
                 '2e6e766476722e6e657400000000000000000000000000006022000093f5d10000000000000000000000000000000000'
         )
         data = bytes.fromhex(data)
+        async with semaphore:
+            for retry in range(max_retries):
+                response = await self.send_request(self.server_checker, self.port_checker, data,
+                                                   socket_type=socket.SOCK_STREAM)
 
-        for retry in range(max_retries):
-            await self.rate_limiter.wait_for_request_slot()
-            response = await self.send_request(self.server_checker, self.port_checker, data,
-                                               socket_type=socket.SOCK_STREAM)
+                if response is not None:
+                    if response[4] == 1:
+                        print(f'\u001b[32m[+] Camera with ID: {camera_id} is online!\u001b[37m')
+                        relay = await self.create_socket(camera_id)
+                        if relay:
+                            await self.connect_to_relay(relay, camera_id)
+                        return True
+                    else:
+                        return False
 
-            if response is not None:
-                if response[4] == 1:
-                    print(f'\u001b[32m[+] Camera with ID: {camera_id} is online!\u001b[37m')
-                    relay = await self.create_socket(camera_id)
-                    if relay:
-                        await self.connect_to_relay(relay, camera_id)
-                    return True
-                else:
-                    return False
+                wait_time = (2 ** retry) + random.uniform(0, 0.2 * (2 ** retry))
+                print(f'\u001b[32m[+] Error: Connection failed... retrying in {wait_time:.2f} seconds...\u001b[37m')
+                await asyncio.sleep(wait_time)
 
-            wait_time = (2 ** retry) + random.uniform(0, 0.2 * (2 ** retry))
-            print(f'\u001b[32m[+] Error: Connection failed... retrying in {wait_time:.2f} seconds...\u001b[37m')
-            await asyncio.sleep(wait_time)
-
-        print(
-            f'\u001b[31m[-] Camera with ID: {camera_id} is offline or not responding after {max_retries} retries!\u001b[37m')
-        return False
+            print(
+                f'\u001b[31m[-] Camera with ID: {camera_id} is offline or not responding after {max_retries} retries!\u001b[37m')
+            return False
 
     async def connect_to_relay(self, relay_data, camera_id):
         # Проверка, что relay_data не является None и содержит необходимые данные
@@ -208,13 +205,6 @@ class AsyncServer:
         """
         Asynchronously check a batch of cameras.
         """
-        tasks = [self.check_camera(camera_id) for camera_id in camera_ids]
+        semaphore = asyncio.Semaphore(50)  # ограничиваем количество одновременных запросов
+        tasks = [self.check_camera(camera_id, semaphore) for camera_id in camera_ids]
         return await asyncio.gather(*tasks)
-
-    @staticmethod
-    async def camera_id_generator(start_id, end_id, batch_size):
-        """
-        Asynchronous generator to yield batches of camera IDs.
-        """
-        for i in range(start_id, end_id, batch_size):
-            yield [str(j) for j in range(i, min(i + batch_size, end_id + 1))]
