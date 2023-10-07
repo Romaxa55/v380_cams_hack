@@ -14,5 +14,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+
     - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag my-image-name:$(date +%s)
+      uses: mr-smithers-excellent/docker-build-push@v6
+      with:
+        image: ghcr.io/romaxa55/v380_cams_hack/v380:latest
+        registry: docker.pkg.github.com
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
