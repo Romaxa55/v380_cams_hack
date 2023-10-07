@@ -6,6 +6,8 @@ from app.server import AsyncServer
 
 
 async def main():
+    print("Start program")
+
     # Получаем переменные окружения; используем значения по умолчанию, если они не заданы
     start_id = int(os.environ.get('START_ID', 19748419))
     end_id = int(os.environ.get('END_ID', 39749429))
