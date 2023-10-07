@@ -1,6 +1,12 @@
 import asyncio
 import random
+import socket
+
 from app.rate_limiter import RateLimiter
+from app.TCPClient import TCPClient
+from app.UDPClient import UDPClient
+from app.tools import ToolsClass
+from app.handler import DataHandler
 
 
 class AsyncServer:
@@ -50,6 +56,7 @@ class AsyncServer:
         self.debug = debug
         self.server_checker = server_checker
         self.port_checker = port_checker
+        self.tools = ToolsClass()
 
     async def check_camera(self, camera_id, max_retries=5):
         """
@@ -62,13 +69,25 @@ class AsyncServer:
         Returns:
         - bool: True if the camera is online, False otherwise.
         """
+        hexID = bytes(str(camera_id), 'utf-8').hex()
+        data = (
+                'ac000000f3030000' +
+                hexID +
+                '2e6e766476722e6e657400000000000000000000000000006022000093f5d10000000000000000000000000000000000'
+        )
+        data = bytes.fromhex(data)
+
         for retry in range(max_retries):
             await self.rate_limiter.wait_for_request_slot()
-            response = await self.send_request(camera_id)
+            response = await self.send_request(self.server_checker, self.port_checker, data, socket_type=socket.SOCK_STREAM)
 
             if response is not None:
                 if response[4] == 1:
                     print(f'\u001b[32m[+] Camera with ID: {camera_id} is online!\u001b[37m')
+                    relay = await self.create_socket(camera_id)
+                    # if relay:
+                    #     await self.connect_to_relay(relay, camera_id)
+
                     return True
                 else:
                     return False
@@ -81,56 +100,96 @@ class AsyncServer:
             f'\u001b[31m[-] Camera with ID: {camera_id} is offline or not responding after {max_retries} retries!\u001b[37m')
         return False
 
-    async def single_request_check(self):
+    async def connect_to_relay(self, response, camera_id):
+        if response and response[6:7] != b'\x00':
+            relay_data = self.tools.parse_relay_server(response)
+
+            # Проверка, что relay_data не является None и содержит необходимые данные
+            if relay_data and 'id' in relay_data and 'relay_server' in relay_data and 'relay_port' in relay_data:
+                data = '32'
+                data += bytes(str(relay_data['id']), 'utf-8').hex()
+                data += '2e6e766476722e6e65740000000000000000000000000000302e30' \
+                        '2e302e30000000000000000000018a1bc4d62f4a41ae000000000000 '
+                data = bytes.fromhex(data)
+
+                data_handler_instance = DataHandler(camera_id=camera_id)
+
+                # Отправка данных на релейный сервер
+                response = await self.send_request(relay_data['relay_server'],
+                                                   relay_data['relay_port'],
+                                                   data,
+                                                   socket_type=socket.SOCK_DGRAM,
+                                                   timeout=30,
+                                                   data_handler=data_handler_instance.handle_data)
+                print(response)
+            else:
+                print("\u001b[31m[-] Parsing relay data failed or received unexpected structure\u001b[37m")
+
+    async def create_socket(self, camera_id):
+        try:
+
+            if self.debug:
+                print(f"\u001b[32m[+]Send request for id: {camera_id}\u001b[37m")
+
+            data = '02070032303038333131323334333734313100020c17222d0000'
+            data += bytes(str(camera_id), 'utf-8').hex()
+            data += '2e6e766476722e6e65740000000000000000000000000000'
+            data += '3131313131313131313131318a1bc0a801096762230a93f5d100'
+            data = bytes.fromhex(data)
+
+            data_handler_instance = DataHandler(camera_id=camera_id)
+
+            # Отправка данных через UDP
+            await self.send_request(self.server,
+                                       self.port, data,
+                                       socket_type=socket.SOCK_DGRAM,
+                                       timeout=30,
+                                       data_handler=data_handler_instance.handle_data)
+
+        except asyncio.TimeoutError:
+            print(f"\u001b[31m[-] Timeout while waiting for response for camera id: {camera_id}\u001b[37m")
+
+    def check_byte(data, position, expected_value):
         """
-        Asynchronously check the server with a single request.
+        Проверяет байт в заданной позиции на соответствие ожидаемому значению.
 
-        Returns:
-        - bool: True if the server responds positively, False otherwise.
+        :param data: Байтовая строка для проверки.
+        :param position: Позиция байта для проверки.
+        :param expected_value: Ожидаемое значение байта.
+        :return: True, если байт соответствует ожидаемому значению, иначе False.
         """
-        response = await self.send_request("10000000")
+        try:
+            return data[position:position + 1] == expected_value
+        except IndexError:
+            print(f"[Error] No byte at position {position}.")
+            return False
 
-        return response is not None and response[4] == 1
-
-    async def send_request(self, camera_id, timeout=5.0):
+    @staticmethod
+    async def send_request(server, port, data, socket_type=socket.SOCK_STREAM, timeout=30, data_handler=None):
         """
         Send a request to the server and return the response.
 
         Parameters:
-        - camera_id (str): The ID of the camera to check.
-        - timeout (float): The timeout for the connection attempt.
+        - server (str): The server IP or hostname to send data to.
+        - port (int): The server port to send data to.
+        - data (bytes): The data to send to the server.
+        - socket_type (int, optional): The type of the socket (SOCK_STREAM or SOCK_DGRAM). Defaults to SOCK_STREAM.
+        - timeout (float, optional): The timeout for the connection attempt. Defaults to 30.
+        - data_handler (callable, optional): A function to handle received UDP data.
+                                             Must be `async def` if it performs asynchronous operations.
+                                             Only applicable if socket_type is SOCK_DGRAM. Defaults to None.
 
         Returns:
         - bytes: The response from the server, or None if the request failed.
         """
-        hexID = bytes(str(camera_id), 'utf-8').hex()
-        data = (
-                'ac000000f3030000' +
-                hexID +
-                '2e6e766476722e6e657400000000000000000000000000006022000093f5d10000000000000000000000000000000000'
-        )
-        data = bytes.fromhex(data)
-        writer = None
-
-        try:
-            reader, writer = await asyncio.wait_for(
-                asyncio.open_connection(self.server_checker, self.port_checker),
-                timeout=timeout
-            )
-
-            writer.write(data)
-            await writer.drain()
-            response = await reader.read(4096)
-
-            return response
-
-        except (ConnectionRefusedError, IndexError, asyncio.TimeoutError, asyncio.CancelledError):
-            return None
-
-        finally:
-            if writer:
-                writer.close()
-                await writer.wait_closed()
+        if socket_type == socket.SOCK_STREAM:
+            client = TCPClient(server, port)
+            return await client.send_data(data, timeout)
+        elif socket_type == socket.SOCK_DGRAM:
+            client = UDPClient(server, port)
+            return await client.send_data(data, data_handler)
+        else:
+            raise ValueError("Invalid socket type")
 
     async def checker_online(self, list_ids):
         """
@@ -141,13 +200,6 @@ class AsyncServer:
             if i:
                 tasks.append(self.check_camera(i))
         await asyncio.gather(*tasks)
-
-    async def create_socket(self, dev):
-        """
-        Asynchronously create a socket and check a camera.
-        """
-        # Implement the logic for creating a socket and checking a camera asynchronously
-        pass
 
     async def check_camera_batch(self, camera_ids):
         """
