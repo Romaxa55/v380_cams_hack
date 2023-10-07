@@ -2,6 +2,7 @@ version: "3.9"
 
 services:
   v380:
+    image: ghcr.io/romaxa55/romaxa55/v380_cams_hack/v380:latest
     build:
       context: .
       dockerfile: Dockerfile
