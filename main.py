@@ -6,7 +6,7 @@ from app.server import AsyncServer
 
 async def main():
     start_id = 19748419
-    end_id = 19748420
+    end_id = 19759521
     batch_size = 1000  # Размер пачки ID для одновременной проверки
 
     server = AsyncServer(debug=True)  # Используйте ваши параметры здесь

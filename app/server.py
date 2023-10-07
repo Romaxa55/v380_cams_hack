@@ -33,7 +33,7 @@ class AsyncServer:
     def __init__(self, server='ipc1300.av380.net', port=8877, timeout=300,
                  file_list_cams='cams.txt', pass_file='pass.txt', debug=False,
                  server_checker='149.129.177.248', port_checker=8900,
-                 max_requests_per_minute=300):
+                 max_requests_per_minute=300, relay_queue=None):
         """
         Initializes the AsyncServer with the provided parameters.
 
@@ -79,15 +79,15 @@ class AsyncServer:
 
         for retry in range(max_retries):
             await self.rate_limiter.wait_for_request_slot()
-            response = await self.send_request(self.server_checker, self.port_checker, data, socket_type=socket.SOCK_STREAM)
+            response = await self.send_request(self.server_checker, self.port_checker, data,
+                                               socket_type=socket.SOCK_STREAM)
 
             if response is not None:
                 if response[4] == 1:
                     print(f'\u001b[32m[+] Camera with ID: {camera_id} is online!\u001b[37m')
                     relay = await self.create_socket(camera_id)
-                    # if relay:
-                    #     await self.connect_to_relay(relay, camera_id)
-
+                    if relay:
+                        await self.connect_to_relay(relay, camera_id)
                     return True
                 else:
                     return False
@@ -100,36 +100,36 @@ class AsyncServer:
             f'\u001b[31m[-] Camera with ID: {camera_id} is offline or not responding after {max_retries} retries!\u001b[37m')
         return False
 
-    async def connect_to_relay(self, response, camera_id):
-        if response and response[6:7] != b'\x00':
-            relay_data = self.tools.parse_relay_server(response)
+    async def connect_to_relay(self, relay_data, camera_id):
+        # Проверка, что relay_data не является None и содержит необходимые данные
+        if relay_data and 'id' in relay_data and 'relay_server' in relay_data and 'relay_port' in relay_data:
+            data = '32'
+            data += bytes(str(relay_data['id']), 'utf-8').hex()
+            data += '2e6e766476722e6e65740000000000000000000000000000302e30' \
+                    '2e302e30000000000000000000018a1bc4d62f4a41ae000000000000 '
+            data = bytes.fromhex(data)
 
-            # Проверка, что relay_data не является None и содержит необходимые данные
-            if relay_data and 'id' in relay_data and 'relay_server' in relay_data and 'relay_port' in relay_data:
-                data = '32'
-                data += bytes(str(relay_data['id']), 'utf-8').hex()
-                data += '2e6e766476722e6e65740000000000000000000000000000302e30' \
-                        '2e302e30000000000000000000018a1bc4d62f4a41ae000000000000 '
-                data = bytes.fromhex(data)
+            local_relay_queue = asyncio.Queue()
 
-                data_handler_instance = DataHandler(camera_id=camera_id)
+            data_handler_instance = DataHandler(camera_id=camera_id, relay_queue=local_relay_queue)
 
-                # Отправка данных на релейный сервер
-                response = await self.send_request(relay_data['relay_server'],
-                                                   relay_data['relay_port'],
-                                                   data,
-                                                   socket_type=socket.SOCK_DGRAM,
-                                                   timeout=30,
-                                                   data_handler=data_handler_instance.handle_data)
-                print(response)
-            else:
-                print("\u001b[31m[-] Parsing relay data failed or received unexpected structure\u001b[37m")
+            # Отправка данных на релейный сервер
+            return await self.send_request(relay_data['relay_server'],
+                                           relay_data['relay_port'],
+                                           data,
+                                           socket_type=socket.SOCK_DGRAM,
+                                           timeout=30,
+                                           data_handler=data_handler_instance.handle_data
+                                           )
+        else:
+            print("\u001b[31m[-] Parsing relay data failed or received unexpected structure\u001b[37m")
+            return None
 
     async def create_socket(self, camera_id):
         try:
 
             if self.debug:
-                print(f"\u001b[32m[+]Send request for id: {camera_id}\u001b[37m")
+                print(f"\u001b[32m[+] Send request for id: {camera_id}\u001b[37m")
 
             data = '02070032303038333131323334333734313100020c17222d0000'
             data += bytes(str(camera_id), 'utf-8').hex()
@@ -137,32 +137,33 @@ class AsyncServer:
             data += '3131313131313131313131318a1bc0a801096762230a93f5d100'
             data = bytes.fromhex(data)
 
-            data_handler_instance = DataHandler(camera_id=camera_id)
+            local_relay_queue = asyncio.Queue()
+
+            data_handler_instance = DataHandler(camera_id=camera_id, relay_queue=local_relay_queue)
 
             # Отправка данных через UDP
             await self.send_request(self.server,
-                                       self.port, data,
-                                       socket_type=socket.SOCK_DGRAM,
-                                       timeout=30,
-                                       data_handler=data_handler_instance.handle_data)
+                                    self.port, data,
+                                    socket_type=socket.SOCK_DGRAM,
+                                    timeout=30,
+                                    data_handler=data_handler_instance.handle_data
+                                    )
+
+            try:
+                # Блокировка выполнения до тех пор, пока в очереди не появится элемент
+                return await asyncio.wait_for(local_relay_queue.get(), timeout=3)
+            except asyncio.TimeoutError:
+                return None
+            except Exception as e:
+                print(f"[ERROR] An error occurred while waiting for relay data: {str(e)}")
+                return None
+            else:
+                print("[INFO] Relay data received:", result)
+                return None
 
         except asyncio.TimeoutError:
-            print(f"\u001b[31m[-] Timeout while waiting for response for camera id: {camera_id}\u001b[37m")
-
-    def check_byte(data, position, expected_value):
-        """
-        Проверяет байт в заданной позиции на соответствие ожидаемому значению.
-
-        :param data: Байтовая строка для проверки.
-        :param position: Позиция байта для проверки.
-        :param expected_value: Ожидаемое значение байта.
-        :return: True, если байт соответствует ожидаемому значению, иначе False.
-        """
-        try:
-            return data[position:position + 1] == expected_value
-        except IndexError:
-            print(f"[Error] No byte at position {position}.")
-            return False
+            print(f"\u001b[33m[-] Timeout while waiting for response for camera id: {camera_id}\u001b[37m")
+            return None
 
     @staticmethod
     async def send_request(server, port, data, socket_type=socket.SOCK_STREAM, timeout=30, data_handler=None):
@@ -200,6 +201,8 @@ class AsyncServer:
             if i:
                 tasks.append(self.check_camera(i))
         await asyncio.gather(*tasks)
+
+
 
     async def check_camera_batch(self, camera_ids):
         """

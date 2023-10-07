@@ -21,8 +21,11 @@ class UDPClientProtocol(asyncio.DatagramProtocol):
         print(f"[ERROR] Error received: {exc}")
 
     def connection_lost(self, exc):
-        print("[ERROR] Connection lost")
-        self.on_con_lost.set_result(True)
+        try:
+            if not self.on_con_lost.done():
+                self.on_con_lost.set_result(True)
+        except asyncio.exceptions.InvalidStateError:
+            pass
 
 
 class UDPClient:
@@ -30,7 +33,14 @@ class UDPClient:
         self.server = server
         self.port = port
 
-    async def send_data(self, data, data_handler=None):
+    async def send_data(self, data, data_handler=None, timeout=30):
+        """
+        Отправка данных по UDP.
+
+        :param data: байтовые данные для отправки.
+        :param data_handler: опциональный асинхронный обработчик данных, вызываемый при получении данных.
+        :param timeout: опциональный тайм-аут для запроса (по умолчанию 30 секунд).
+        """
         loop = asyncio.get_running_loop()
         on_con_lost = loop.create_future()
 
@@ -41,8 +51,9 @@ class UDPClient:
 
         try:
             transport.sendto(data)
-            await on_con_lost  # Ждем, пока соединение завершится
+            await asyncio.wait_for(on_con_lost, timeout)  # управление тайм-аутом
         except asyncio.TimeoutError:
-            print("[ERROR] Timeout!")
+            pass
+            # print(f"\u001b[33m[-] Timeout {self.server}:{self.port}\u001b[37m")
         finally:
             transport.close()
