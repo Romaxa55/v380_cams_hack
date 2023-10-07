@@ -18,7 +18,7 @@ jobs:
     - name: Build the Docker image
       uses: mr-smithers-excellent/docker-build-push@v6
       with:
-        image: ghcr.io/romaxa55/v380_cams_hack/v380:latest
-        registry: docker.pkg.github.com
+        image: romaxa55/v380_cams_hack/v380:latest
+        registry: ghcr.io
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
