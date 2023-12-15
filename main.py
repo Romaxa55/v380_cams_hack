@@ -9,9 +9,9 @@ async def main():
     print("Start program")
 
     # Получаем переменные окружения; используем значения по умолчанию, если они не заданы
-    start_id = int(os.environ.get('START_ID', 59451000))
-    end_id = int(os.environ.get('END_ID', 59551000))
-    batch_size = int(os.environ.get('BATCH_SIZE', 1000000))
+    start_id = int(os.environ.get('START_ID', 10451000))
+    end_id = int(os.environ.get('END_ID', 99551000))
+    batch_size = int(os.environ.get('BATCH_SIZE', 10000))
 
     server = AsyncServer(debug=False)  # Используйте ваши параметры здесь
 
