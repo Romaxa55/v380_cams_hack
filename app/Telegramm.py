@@ -32,6 +32,8 @@ class TelegramBot:
         """
         self.token = token or os.environ.get('TELEGRAM_TOKEN')
         self.chat_id = chat_id or os.environ.get('TELEGRAM_CHAT_ID')
+        # Установка флага enable в зависимости от наличия token и chat_id
+        self.enable = bool(self.token and self.chat_id)
 
         if self.token is None or self.chat_id is None:
             print(
@@ -48,6 +50,11 @@ class TelegramBot:
         parse_mode : str, optional
             Форматирование текста сообщения, по умолчанию "Markdown".
         """
+        # Проверка, включена ли функция отправки сообщений
+        if not self.enable:
+            print("Отправка сообщений отключена.")
+            return
+
         # Валидация текста
         if not isinstance(text, str) or not text.strip():
             print("Ошибка: текст сообщения не может быть пустым или None")
