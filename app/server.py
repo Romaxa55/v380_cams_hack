@@ -205,6 +205,6 @@ class AsyncServer:
         """
         Asynchronously check a batch of cameras.
         """
-        semaphore = asyncio.Semaphore(500)  # ограничиваем количество одновременных запросов
+        semaphore = asyncio.Semaphore(5000)  # ограничиваем количество одновременных запросов
         tasks = [self.check_camera(camera_id, semaphore) for camera_id in camera_ids]
         return await asyncio.gather(*tasks)
